@@ -16,7 +16,6 @@ pthread_cond_t cd1;
 pthread_cond_t cd2;
 
 pthread_mutex_t lock;
-pthread_mutex_t lock2;
 FILE *fd_r;
 FILE *fd_w;
 
@@ -87,6 +86,10 @@ int main()
     fd_w = fopen("result", "at");
     if (fd_r == NULL || fd_w == NULL)
         printf("无法打开\n");
+    pthread_mutex_init(&lock, NULL);
+    pthread_cond_init(&cd0, NULL);
+    pthread_cond_init(&cd1, NULL);
+    pthread_cond_init(&cd2, NULL);
 
     // 创建线程
     pthread_t tid[3];
