@@ -32,7 +32,6 @@ void *pthread_read(void *arg)
         bzero(bufferA, sizeof(bufferA));
         if (fgets(bufferA, sizeof(bufferA), fd_r) == NULL) // 如果读取完成就exit
             exit(0);
-        printf("%s\n", bufferA);
         status = 1;
         pthread_mutex_unlock(&lock);
         pthread_cond_signal(&cd1); // 唤醒1
@@ -48,10 +47,8 @@ void *pthread_is(void *arg)
         if (status != 1)
             pthread_cond_wait(&cd1, &lock);
 
-        printf("is\n");
         if (strstr(bufferA, "CHIUSECASE") == NULL)
         {
-            printf("no\n");
             // 不是CHIUSECASE继续执行0
             status = 0;
             pthread_mutex_unlock(&lock);
@@ -59,7 +56,6 @@ void *pthread_is(void *arg)
         }
         else // 查找成功  写入buffB
         {
-            printf("yes\n");
             strcpy(bufferB, bufferA);
             status = 2;
             pthread_mutex_unlock(&lock);
@@ -76,9 +72,10 @@ void *pthread_write(void *arg)
         if (status != 2)
             pthread_cond_wait(&cd2, &lock);
 
-        printf("write: %s\n", bufferB);
+        printf("write success: %s\n", bufferB);
         fputs(bufferB, fd_w);
         bzero(bufferB, sizeof(bufferB));
+        status = 0;
         pthread_mutex_unlock(&lock);
         pthread_cond_signal(&cd0); // 唤醒0
     }
