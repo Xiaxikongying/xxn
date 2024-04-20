@@ -8,7 +8,8 @@
 #include <signal.h>
 #include <pthread.h>
 
-int status; // 0表示当前需要读取    1表示当前是判断   2表示当前是写入到result
+int statusA;
+int statusC = 1;
 char bufferA[1024];
 char bufferB[1024];
 pthread_cond_t cd0;
@@ -16,6 +17,7 @@ pthread_cond_t cd1;
 pthread_cond_t cd2;
 
 pthread_mutex_t lock;
+pthread_mutex_t lock2;
 FILE *fd_r;
 FILE *fd_w;
 
@@ -24,14 +26,15 @@ void *pthread_read(void *arg)
     while (1)
     {
         pthread_mutex_lock(&lock);
-        if (status != 0)
+        if (statusA == 1) // 表示B在工作
             pthread_cond_wait(&cd0, &lock);
 
         // 读取一行数据  写入buffer A  唤醒2
         bzero(bufferA, sizeof(bufferA));
         if (fgets(bufferA, sizeof(bufferA), fd_r) == NULL) // 如果读取完成就exit
             exit(0);
-        status = 1;
+        statusA = 1;
+        // printf("status A changed = %d\n", statusA);
         pthread_mutex_unlock(&lock);
         pthread_cond_signal(&cd1); // 唤醒1
     }
@@ -43,23 +46,29 @@ void *pthread_is(void *arg)
     while (1)
     {
         pthread_mutex_lock(&lock);
-        if (status != 1)
+        if (statusA == 0) // 是A的工作状态
             pthread_cond_wait(&cd1, &lock);
 
-        if (strstr(bufferA, "CHIUSECASE") == NULL)
+        pthread_mutex_lock(&lock2);
+        if (statusC == 0) // 是C的工作状态
+            pthread_cond_wait(&cd1, &lock2);
+
+        // 若AC都不在工作，B就开始工作
+        if (strstr(bufferA, "CHIUSECASE") != NULL)
         {
-            // 不是CHIUSECASE继续执行0
-            status = 0;
-            pthread_mutex_unlock(&lock);
-            pthread_cond_signal(&cd0); // 唤醒0
-        }
-        else // 查找成功  写入buffB
-        {
+            // 查找成功  写入buffB  然后C开始工作
+            //printf("copy : %s\n", bufferA);
             strcpy(bufferB, bufferA);
-            status = 2;
-            pthread_mutex_unlock(&lock);
+            statusC = 0;
             pthread_cond_signal(&cd2); // 唤醒2
         }
+        // 不论是不是CHIUSECASE   A都要继续工作
+        statusA = 0;
+        pthread_cond_signal(&cd0); // 唤醒0
+        pthread_mutex_unlock(&lock);
+        pthread_mutex_unlock(&lock2);
+        // printf("recever data %s\n", bufferA);
+        sleep(0);
     }
 }
 void *pthread_write(void *arg)
@@ -67,15 +76,15 @@ void *pthread_write(void *arg)
     // 从bufferB中读取数据，写入Result.log
     while (1)
     {
-        pthread_mutex_lock(&lock);
-        if (status != 2)
-            pthread_cond_wait(&cd2, &lock);
-
+        pthread_mutex_lock(&lock2);
+        if (statusC == 1) // 表示B在工作
+            pthread_cond_wait(&cd2, &lock2);
+        
         printf("write success: %s\n", bufferB);
         fputs(bufferB, fd_w);
         bzero(bufferB, sizeof(bufferB));
-        status = 0;
-        pthread_mutex_unlock(&lock);
+        statusC = 1;
+        pthread_mutex_unlock(&lock2);
         pthread_cond_signal(&cd0); // 唤醒0
     }
 }
@@ -87,6 +96,7 @@ int main()
     if (fd_r == NULL || fd_w == NULL)
         printf("无法打开\n");
     pthread_mutex_init(&lock, NULL);
+    pthread_mutex_init(&lock2, NULL);
     pthread_cond_init(&cd0, NULL);
     pthread_cond_init(&cd1, NULL);
     pthread_cond_init(&cd2, NULL);
